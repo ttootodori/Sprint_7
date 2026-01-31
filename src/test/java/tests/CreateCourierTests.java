@@ -1,30 +1,34 @@
 package tests;
 
-import io.qameta.allure.Step;
+import model.CourierCreateRequest;
+import model.CourierLoginRequest;
+import steps.CourierSteps;
+
 import io.qameta.allure.junit4.DisplayName;
-import io.restassured.RestAssured;
 import io.restassured.response.ValidatableResponse;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.notNullValue;
 
-public class CreateCourierTests {
+public class CreateCourierTests extends BaseTest {
+
+    private CourierSteps courierSteps;
 
     private String lastCreatedCourierLogin;
     private String lastCreatedCourierPassword;
+    private Integer lastCreatedCourierId;
 
     @Before
     public void setUp() {
-        RestAssured.baseURI = "https://qa-scooter.praktikum-services.ru";
+        courierSteps = new CourierSteps();
     }
 
     @After
     public void tearDown() {
-        if (lastCreatedCourierLogin != null && lastCreatedCourierPassword != null) {
-            deleteCourier(lastCreatedCourierLogin, lastCreatedCourierPassword);
+        if (lastCreatedCourierId != null) {
+            courierSteps.deleteCourier(lastCreatedCourierId);
         }
     }
 
@@ -33,124 +37,101 @@ public class CreateCourierTests {
     @Test
     @DisplayName("Курьера можно создать - успешный запрос возвращает ok: true")
     public void courierCanBeCreatedTest() {
-        String login = uniqueLogin();
-        String password = generatePassword();
+        CourierCreateRequest body = createCourierBody();
 
-        lastCreatedCourierLogin = login;
-        lastCreatedCourierPassword = password;
+        courierSteps.createCourier(body);
 
-        String body = courierBody(login, password, "Test");
+        ValidatableResponse loginResponse =
+                courierSteps.loginCourier(
+                        new CourierLoginRequest(
+                                lastCreatedCourierLogin,
+                                lastCreatedCourierPassword
+                        )
+                );
 
-        ValidatableResponse response = sendCreateCourierRequest(body, 201);
-        response.body("ok", notNullValue());
+        lastCreatedCourierId = loginResponse.extract().path("id");
+        loginResponse.body("id", notNullValue());
     }
 
     @Test
     @DisplayName("Нельзя создать двух курьеров с одинаковым логином")
     public void cannotCreateTwoCouriersWithSameLoginTest() {
-        String login = uniqueLogin();
-        String password = generatePassword();
+        CourierCreateRequest body = createCourierBody();
 
-        lastCreatedCourierLogin = login;
-        lastCreatedCourierPassword = password;
+        courierSteps.createCourier(body);
 
-        String body = courierBody(login, password, "Test");
+        ValidatableResponse response =
+                courierSteps.createCourierExpectingError(body, 409);
 
-        sendCreateCourierRequest(body, 201);
-        ValidatableResponse response = sendCreateCourierRequest(body, 409);
         response.body("message", notNullValue());
     }
 
     @Test
     @DisplayName("Нельзя создать курьера без логина")
     public void cannotCreateCourierWithoutLoginTest() {
-        String body = "{ \"password\": \"test_pass\", \"firstName\": \"Test\" }";
+        CourierCreateRequest body =
+                new CourierCreateRequest(null, "test_pass", "Test");
 
-        ValidatableResponse response = sendCreateCourierRequest(body, 400);
+        ValidatableResponse response =
+                courierSteps.createCourierExpectingError(body, 400);
+
         response.body("message", notNullValue());
     }
 
     @Test
     @DisplayName("Нельзя создать курьера без пароля")
     public void cannotCreateCourierWithoutPasswordTest() {
-        String body = "{ \"login\": \"test_login\", \"firstName\": \"Test\" }";
+        CourierCreateRequest body =
+                new CourierCreateRequest("test_login", null, "Test");
 
-        ValidatableResponse response = sendCreateCourierRequest(body, 400);
+        ValidatableResponse response =
+                courierSteps.createCourierExpectingError(body, 400);
+
         response.body("message", notNullValue());
     }
 
     @Test
     @DisplayName("Можно создать курьера без имени")
     public void canCreateCourierWithoutFirstNameTest() {
-        String login = uniqueLogin();
-        String password = generatePassword();
+        CourierCreateRequest body =
+                new CourierCreateRequest(
+                        uniqueLogin(),
+                        generatePassword(),
+                        null
+                );
 
-        lastCreatedCourierLogin = login;
-        lastCreatedCourierPassword = password;
+        courierSteps.createCourier(body);
 
-        String body = String.format(
-                "{ \"login\": \"%s\", \"password\": \"%s\" }",
-                login, password
+        ValidatableResponse loginResponse =
+                courierSteps.loginCourier(
+                        new CourierLoginRequest(
+                                body.getLogin(),
+                                body.getPassword()
+                        )
+                );
+
+        lastCreatedCourierId = loginResponse.extract().path("id");
+        loginResponse.body("id", notNullValue());
+    }
+
+    // ===================== HELPERS =====================
+
+    private CourierCreateRequest createCourierBody() {
+        lastCreatedCourierLogin = uniqueLogin();
+        lastCreatedCourierPassword = generatePassword();
+
+        return new CourierCreateRequest(
+                lastCreatedCourierLogin,
+                lastCreatedCourierPassword,
+                "Test"
         );
-
-        ValidatableResponse response = sendCreateCourierRequest(body, 201);
-        response.body("ok", notNullValue());
     }
 
-    // ===================== STEPS =====================
-
-    @Step("Сформировать тело запроса для создания курьера")
-    public String courierBody(String login, String password, String firstName) {
-        return String.format(
-                "{\"login\":\"%s\",\"password\":\"%s\",\"firstName\":\"%s\"}",
-                login, password, firstName
-        );
-    }
-
-    @Step("Отправить POST /api/v1/courier и проверить статус {statusCode}")
-    public ValidatableResponse sendCreateCourierRequest(String body, int statusCode) {
-        return given()
-                .header("Content-type", "application/json")
-                .body(body)
-                .when()
-                .post("/api/v1/courier")
-                .then()
-                .statusCode(statusCode);
-    }
-
-    @Step("Сгенерировать уникальный логин курьера")
-    public String uniqueLogin() {
+    private String uniqueLogin() {
         return "courier_" + System.currentTimeMillis();
     }
 
-    @Step("Сгенерировать пароль курьера")
-    public String generatePassword() {
+    private String generatePassword() {
         return "pass_" + System.currentTimeMillis();
-    }
-
-    @Step("Удалить курьера: {login}")
-    private void deleteCourier(String login, String password) {
-        try {
-            String loginBody = String.format(
-                    "{\"login\":\"%s\",\"password\":\"%s\"}",
-                    login, password
-            );
-
-            Integer courierId = given()
-                    .header("Content-type", "application/json")
-                    .body(loginBody)
-                    .post("/api/v1/courier/login")
-                    .then()
-                    .extract()
-                    .path("id");
-
-            if (courierId != null) {
-                given()
-                        .delete("/api/v1/courier/" + courierId)
-                        .then()
-                        .statusCode(200);
-            }
-        } catch (Exception ignored) {
-        }
     }
 }

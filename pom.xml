@@ -16,11 +16,11 @@
         <maven.compiler.target>11</maven.compiler.target>
 
         <junit.version>4.13.2</junit.version>
-        <rest-assured.version>4.5.1</rest-assured.version>
+        <restassured.version>5.4.0</restassured.version>
         <allure.version>2.21.0</allure.version>
         <aspectj.version>1.9.7</aspectj.version>
+        <assertj.version>3.27.3</assertj.version>
         <slf4j.version>1.7.36</slf4j.version>
-        <jackson.version>2.14.1</jackson.version>
     </properties>
 
     <dependencies>
@@ -33,11 +33,26 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Rest Assured -->
+        <!-- Rest Assured (всё внутри, json/xml тоже) -->
         <dependency>
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>
-            <version>${rest-assured.version}</version>
+            <version>${restassured.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.17.0</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- AssertJ -->
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>${assertj.version}</version>
             <scope>test</scope>
         </dependency>
 
@@ -77,7 +92,6 @@
     <build>
         <plugins>
 
-            <!-- Компилятор -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -85,18 +99,14 @@
                 <configuration>
                     <source>${maven.compiler.source}</source>
                     <target>${maven.compiler.target}</target>
-                    <encoding>${project.build.sourceEncoding}</encoding>
                 </configuration>
             </plugin>
 
-            <!-- Surefire + Allure -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>2.22.2</version>
                 <configuration>
-
-                    <!-- Allure listener -->
                     <properties>
                         <property>
                             <name>listener</name>
@@ -104,27 +114,20 @@
                         </property>
                     </properties>
 
-                    <!-- AspectJ -->
                     <argLine>
                         -javaagent:"${settings.localRepository}/org/aspectj/aspectjweaver/${aspectj.version}/aspectjweaver-${aspectj.version}.jar"
-                        -Dfile.encoding=${project.build.sourceEncoding}
-                        -Dallure.results.directory=${project.build.directory}/allure-results
+                        -Dfile.encoding=UTF-8
+                        -Dallure.results.directory=target/allure-results
                     </argLine>
-
-                    <includes>
-                        <include>**/*Test.java</include>
-                        <include>**/*Tests.java</include>
-                    </includes>
-
                 </configuration>
             </plugin>
 
-            <!-- Allure report -->
             <plugin>
                 <groupId>io.qameta.allure</groupId>
                 <artifactId>allure-maven</artifactId>
-                <version>2.10.0</version>
+                <version>2.12.0</version>
             </plugin>
+
 
         </plugins>
     </build>
